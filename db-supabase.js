@@ -9,15 +9,29 @@ if (!supabaseUrl || !supabaseKey) {
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  db: {
+    schema: 'public'
+  }
+});
 
 // Función para ejecutar consultas SQL directas
 async function query(text, params = []) {
   try {
-    const { data, error } = await supabase.rpc('exec_sql', {
-      query_text: text,
-      query_params: params
-    });
+    // Verificar si es una consulta CREATE TABLE o similar
+    if (text.trim().toUpperCase().startsWith('CREATE')) {
+      const { data, error } = await supabase.rpc('exec_sql', {
+        query_text: text
+      });
+      if (error) throw error;
+      return { rows: [] };
+    }
+
+    // Para otras consultas, usar el cliente normal
+    const { data, error } = await supabase
+      .from(getTableFromQuery(text))
+      .select('*')
+      .filter(params);
     
     if (error) throw error;
     return { rows: data || [] };
@@ -27,6 +41,93 @@ async function query(text, params = []) {
   }
 }
 
+// Helper para extraer el nombre de la tabla de una consulta
+function getTableFromQuery(query) {
+  query = query.toLowerCase();
+  if (query.includes('from')) {
+    const fromPart = query.split('from')[1].trim();
+    return fromPart.split(' ')[0];
+  }
+  if (query.includes('insert into')) {
+    const intoPart = query.split('insert into')[1].trim();
+    return intoPart.split(' ')[0];
+  }
+  if (query.includes('update')) {
+    const updatePart = query.split('update')[1].trim();
+    return updatePart.split(' ')[0];
+  }
+  if (query.includes('delete from')) {
+    const fromPart = query.split('delete from')[1].trim();
+    return fromPart.split(' ')[0];
+  }
+  return '';
+}
+
+async function addConversation(messages) {
+  try {
+    const { data, error } = await supabase
+      .from('conversations')
+      .insert([{ messages }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding conversation:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (err) {
+    console.error('Error in addConversation:', err);
+    throw err;
+  }
+}
+
+async function getAllConversations() {
+  try {
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error getting conversations:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('Error in getAllConversations:', err);
+    throw err;
+  }
+}
+
+async function deleteConversation(id) {
+  try {
+    const { error } = await supabase
+      .from('conversations')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting conversation:', error);
+      throw error;
+    }
+  } catch (err) {
+    console.error('Error in deleteConversation:', err);
+    throw err;
+  }
+}
+
+module.exports = {
+  initDb,
+  createTables,
+  query,
+  addConversation,
+  getAllConversations,
+  deleteConversation
+};
+
 // Función para inicializar la base de datos
 async function initDb() {
   // No necesitamos hacer nada aquí ya que Supabase maneja la conexión
@@ -35,76 +136,32 @@ async function initDb() {
 
 // Función para crear las tablas si no existen
 async function createTables() {
-  const tables = `
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      is_admin BOOLEAN DEFAULT FALSE,
-      reset_token TEXT,
-      reset_token_expires TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS matches (
-      id SERIAL PRIMARY KEY,
-      date DATE NOT NULL,
-      time TIME,
-      location TEXT,
-      max_players INTEGER DEFAULT 14,
-      initial_capacity INTEGER DEFAULT 14,
-      capacity_history JSONB DEFAULT '[]'
-    );
-
-    CREATE TABLE IF NOT EXISTS participants (
-      id SERIAL PRIMARY KEY,
-      match_id INTEGER REFERENCES matches(id) ON DELETE CASCADE,
-      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(match_id, user_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS waitlist (
-      id SERIAL PRIMARY KEY,
-      match_id INTEGER REFERENCES matches(id) ON DELETE CASCADE,
-      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(match_id, user_id)
-    );
-  `;
-
-  // Crear función para ejecutar SQL directo (necesario para queries complejas)
-  const createFunction = `
-    CREATE OR REPLACE FUNCTION exec_sql(query_text TEXT, query_params JSONB DEFAULT '[]')
-    RETURNS JSONB
-    LANGUAGE plpgsql
-    SECURITY DEFINER
-    SET search_path = public
-    AS $$
-    DECLARE
-      result JSONB;
-    BEGIN
-      EXECUTE format($fmt$
-        SELECT COALESCE(
-          jsonb_agg(row_to_json(t)),
-          '[]'::jsonb
-        )
-        FROM (%s) t
-      $fmt$, query_text)
-      USING query_params
-      INTO result;
-      
-      RETURN result;
-    END;
-    $$;
-  `;
-
   try {
-    await query(createFunction);
-    await query(tables);
-    return true;
+    const { error } = await supabase
+      .from('conversations')
+      .select('*')
+      .limit(1);
+
+    if (error && error.code === '42P01') {
+      // La tabla no existe, vamos a crearla
+      const { error: createError } = await supabase.rpc('create_conversations_table');
+
+      if (createError) {
+        console.error('Error creando tabla conversations:', createError);
+        throw createError;
+      }
+
+      console.log('Tabla conversations creada correctamente');
+    } else if (error) {
+      console.error('Error verificando tabla:', error);
+      throw error;
+    } else {
+      console.log('Tabla conversations ya existe');
+    }
+
+    console.log('Base de datos inicializada correctamente');
   } catch (err) {
-    console.error('Error creando tablas:', err);
+    console.error('Error en createTables:', err);
     throw err;
   }
 }
