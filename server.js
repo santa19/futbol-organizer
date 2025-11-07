@@ -407,7 +407,7 @@ app.post('/api/matches/:id/expand', async (req, res) => {
     const slotsAvailable = newCapacity - match.max_players;
     if (slotsAvailable > 0) {
       const waitingPlayers = await query(
-        'SELECT user_id FROM waitlist WHERE match_id = $1 ORDER BY created_at ASC LIMIT $2',
+        'SELECT user_id FROM waitlist WHERE match_id = $1 ORDER BY joined_at ASC LIMIT $2',
         [matchId, slotsAvailable]
       );
       
@@ -479,7 +479,7 @@ app.delete('/api/matches/:id/participants/:userId', async (req, res) => {
     await query('DELETE FROM participants WHERE match_id = $1 AND user_id = $2', [matchId, userId]);
 
     // If there is a waitlist, promote the first one
-    const waitRes = await query('SELECT user_id FROM waitlist WHERE match_id = $1 ORDER BY created_at ASC LIMIT 1', [matchId]);
+    const waitRes = await query('SELECT user_id FROM waitlist WHERE match_id = $1 ORDER BY joined_at ASC LIMIT 1', [matchId]);
     if (waitRes.rows[0]) {
       const promoteId = waitRes.rows[0].user_id;
       await query('INSERT INTO participants (match_id, user_id) VALUES ($1, $2)', [matchId, promoteId]);
@@ -535,11 +535,11 @@ app.get('/api/matches/:id/waitlist', async (req, res) => {
     
     // Get all waitlist entries ordered by creation time
     const waitlistResult = await query(`
-      SELECT w.id, w.created_at, u.id as user_id, u.name, u.email 
+      SELECT w.id, w.joined_at, u.id as user_id, u.name, u.email
       FROM waitlist w
       JOIN users u ON u.id = w.user_id
       WHERE w.match_id = $1
-      ORDER BY w.created_at ASC
+      ORDER BY w.joined_at ASC
     `, [matchId]);
     
     // Get user's position if they're in the waitlist
