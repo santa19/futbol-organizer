@@ -134,10 +134,109 @@ async function loadMatches() {
       participantsBtn.textContent = 'Mostrar participantes';
       participantsBtn.style.marginLeft = '8px';
 
-      // Container for inline participants
+      // Container for inline participants and field visualization
       const participantsContainer = document.createElement('div');
       participantsContainer.className = 'participants-inline';
       participantsContainer.style.marginTop = '10px';
+
+      // Inline field visualization
+      const fieldContainer = document.createElement('div');
+      fieldContainer.className = 'soccer-field small-field';
+      fieldContainer.style.width = '320px';
+      fieldContainer.style.height = '240px';
+      fieldContainer.style.marginTop = '10px';
+      // add minimal field lines
+      const fieldLines = document.createElement('div');
+      fieldLines.className = 'field-lines';
+      fieldContainer.appendChild(fieldLines);
+
+      // create base positions (uses same class names as soccer-field.css)
+      const basePositions = ['gk','lb','cb1','cb2','rb','lm','cm1','cm2','rm','st1','st2'];
+      basePositions.forEach(id => {
+        const pos = document.createElement('div');
+        pos.className = 'player-position position-' + id;
+        fieldContainer.appendChild(pos);
+      });
+
+      // helper to render participants into the field and list
+      async function refreshParticipants() {
+        try {
+          const parts = await api(`/api/matches/${encodeURIComponent(m.id)}/participants`);
+          // render list with remove buttons
+          participantsContainer.innerHTML = '';
+          if (!parts || parts.length === 0) {
+            participantsContainer.textContent = 'No hay participantes.';
+          } else {
+            const ul = document.createElement('ul');
+            ul.style.listStyle = 'none';
+            ul.style.padding = '0';
+            ul.style.maxHeight = '200px';
+            ul.style.overflow = 'auto';
+            for (const p of parts) {
+              const li = document.createElement('li');
+              li.style.display = 'flex';
+              li.style.justifyContent = 'space-between';
+              li.style.alignItems = 'center';
+              li.style.padding = '4px 0';
+              const left = document.createElement('span');
+              left.textContent = p.name + (p.email ? ` (${p.email})` : '');
+              const right = document.createElement('div');
+              // Remove button (if admin or self)
+              const removeBtn = document.createElement('button');
+              removeBtn.textContent = 'Borrar';
+              removeBtn.className = 'secondary';
+              removeBtn.addEventListener('click', async () => {
+                if (!confirm(`¿Seguro que quieres borrar a ${p.name} de este partido?`)) return;
+                try {
+                  await api(`/api/matches/${encodeURIComponent(m.id)}/participants/${p.user_id}`, { method: 'DELETE' });
+                  showSuccess('Participante borrado');
+                  await refreshParticipants();
+                  // update participant count in card
+                  const matchUpdated = await api(`/api/matches/${encodeURIComponent(m.id)}`);
+                  card.querySelector('.participant-count').textContent = `${matchUpdated.participant_count}/${matchUpdated.max_players} jugadores`;
+                } catch (err) {
+                  alert(err.error || 'Error al borrar participante');
+                }
+              });
+              right.appendChild(removeBtn);
+
+              li.appendChild(left);
+              li.appendChild(right);
+              ul.appendChild(li);
+            }
+            participantsContainer.appendChild(ul);
+          }
+
+          // Render on field: fill positions based on order
+          const posEls = fieldContainer.querySelectorAll('.player-position');
+          posEls.forEach(el => { el.classList.remove('occupied'); el.textContent = ''; el.title = ''; });
+          parts.forEach((p, idx) => {
+            if (idx < posEls.length) {
+              posEls[idx].classList.add('occupied');
+              posEls[idx].textContent = p.name.charAt(0);
+              posEls[idx].title = p.name;
+            }
+          });
+        } catch (err) {
+          participantsContainer.textContent = 'Error cargando participantes.';
+        }
+      }
+
+      // start polling when the card is visible
+      let pollInterval = null;
+      function startPolling() {
+        if (pollInterval) return;
+        refreshParticipants();
+        pollInterval = setInterval(refreshParticipants, 15000);
+      }
+      function stopPolling() {
+        if (!pollInterval) return;
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+
+      // Start polling immediately for all cards (can be optimized later)
+      startPolling();
 
       participantsBtn.addEventListener('click', async () => {
         // toggle visibility and load participants if empty
@@ -172,6 +271,7 @@ async function loadMatches() {
       right.appendChild(participantsBtn);
       card.appendChild(left);
       card.appendChild(right);
+      card.appendChild(fieldContainer);
       card.appendChild(participantsContainer);
       matchesList.appendChild(card);
     }

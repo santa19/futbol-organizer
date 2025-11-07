@@ -427,6 +427,50 @@ app.get('/api/matches/:id/participants', async (req, res) => {
   }
 });
 
+// Remove a participant from a match (self or admin)
+app.delete('/api/matches/:id/participants/:userId', async (req, res) => {
+  const user = await getCurrentUser(req);
+  if (!user) return res.status(401).json({ error: 'No autenticado' });
+  const matchId = req.params.id;
+  const userId = parseInt(req.params.userId, 10);
+  try {
+    await query('BEGIN');
+
+    // Check authorisation: admin or the user themself
+    if (!user.is_admin && user.id !== userId) {
+      await query('ROLLBACK');
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+
+    // Ensure participant exists
+    const pRes = await query('SELECT * FROM participants WHERE match_id = $1 AND user_id = $2', [matchId, userId]);
+    if (!pRes.rows[0]) {
+      await query('ROLLBACK');
+      return res.status(404).json({ error: 'Participante no encontrado' });
+    }
+
+    await query('DELETE FROM participants WHERE match_id = $1 AND user_id = $2', [matchId, userId]);
+
+    // If there is a waitlist, promote the first one
+    const waitRes = await query('SELECT user_id FROM waitlist WHERE match_id = $1 ORDER BY created_at ASC LIMIT 1', [matchId]);
+    if (waitRes.rows[0]) {
+      const promoteId = waitRes.rows[0].user_id;
+      await query('INSERT INTO participants (match_id, user_id) VALUES ($1, $2)', [matchId, promoteId]);
+      await query('DELETE FROM waitlist WHERE match_id = $1 AND user_id = $2', [matchId, promoteId]);
+    }
+
+    const participantCount = await query('SELECT COUNT(*) as cnt FROM participants WHERE match_id = $1', [matchId]);
+    const waitlistCount = await query('SELECT COUNT(*) as cnt FROM waitlist WHERE match_id = $1', [matchId]);
+
+    await query('COMMIT');
+    res.json({ ok: true, participant_count: parseInt(participantCount.rows[0].cnt), waitlist_count: parseInt(waitlistCount.rows[0].cnt) });
+  } catch (err) {
+    await query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
 // Admin routes
 app.get('/api/users', requireAdmin, async (req, res) => {
   try {
