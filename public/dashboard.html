@@ -5,34 +5,61 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Dashboard - Partidos</title>
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/components.css" />
   </head>
   <body>
-    <main class="container">
-      <header style="display:flex;justify-content:space-between;align-items:center">
-        <h1>Partidos</h1>
-        <div>
-          <span id="userName"></span>
-          <button id="logoutBtn">Cerrar sesión</button>
+    <header class="header">
+      <h1>Fútbol App</h1>
+      <div class="header-right">
+        <div class="user-info">
+          <span id="userName" class="user-name"></span>
+          <span id="adminBadge" class="admin-badge" style="display:none">Admin</span>
         </div>
-      </header>
+        <button id="logoutBtn" class="secondary">Cerrar sesión</button>
+      </div>
+    </header>
 
-      <section id="createMatch">
-        <h2>Crear partido</h2>
-        <form id="createForm">
-          <input name="date" type="date" required />
-          <input name="time" type="time" />
-          <input name="location" placeholder="Lugar" />
-          <input name="max_players" type="number" value="10" min="1" />
-          <button type="submit">Crear</button>
-        </form>
-      </section>
+    <main class="matches-container">
 
       <section id="matches">
-        <label>Filtrar por fecha: <input id="filterDate" type="date" /></label>
-        <button id="loadBtn">Cargar</button>
+        <div class="matches-header">
+          <div class="matches-filters">
+            <label>Filtrar por fecha: <input id="filterDate" type="date" /></label>
+            <button id="loadBtn" class="secondary">Actualizar</button>
+          </div>
+          <button id="createMatchBtn" class="primary">Crear Partido</button>
+        </div>
         <div id="matchesList"></div>
       </section>
+
+      <!-- Modal para crear partido -->
+      <div id="createMatchModal" class="modal-overlay" style="display:none">
+        <div class="modal">
+          <button class="modal-close" id="closeCreateMatch">&times;</button>
+          <h2>Crear Partido</h2>
+          <form id="createForm">
+            <input name="date" type="date" required />
+            <input name="time" type="time" />
+            <input name="location" placeholder="Lugar" />
+            <input name="max_players" type="number" value="10" min="1" />
+            <button type="submit" class="primary">Crear</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Panel de administración -->
+      <div id="adminPanel" class="modal-overlay" style="display:none">
+        <div class="modal">
+          <button class="modal-close" id="closeAdminPanel">&times;</button>
+          <h2>Panel de Administración</h2>
+          <div id="usersList"></div>
+        </div>
+      </div>
     </main>
+
+    <!-- Popup de éxito -->
+    <div id="successPopup" class="success-popup" style="display:none"></div>
+
     <script src="/dashboard.js"></script>
   </body>
 </html>

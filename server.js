@@ -68,8 +68,19 @@ app.use('/api/user', requireAuth);
 // Helper to get current user from session
 async function getCurrentUser(req) {
   if (!req.session.userId) return null;
-  const result = await query('SELECT id, name, email FROM users WHERE id = $1', [req.session.userId]);
+  const result = await query('SELECT id, name, email, is_admin FROM users WHERE id = $1', [req.session.userId]);
   return result.rows[0];
+}
+
+// Middleware to require admin
+function requireAdmin(req, res, next) {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+  if (!req.session.isAdmin) {
+    return res.status(403).json({ error: 'No autorizado' });
+  }
+  next();
 }
 
 // Register
@@ -78,9 +89,17 @@ app.post('/api/register', async (req, res) => {
   if (!name || !email || !password) return res.status(400).json({ error: 'Missing fields' });
   try {
     const hash = await bcrypt.hash(password, 10);
-    const result = await query('INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id', [name, email, hash]);
+    // Make the first user an admin
+    const countResult = await query('SELECT COUNT(*) as count FROM users');
+    const isFirstUser = parseInt(countResult.rows[0].count) === 0;
+    
+    const result = await query(
+      'INSERT INTO users (name, email, password, is_admin) VALUES ($1, $2, $3, $4) RETURNING id, is_admin',
+      [name, email, hash, isFirstUser]
+    );
     req.session.userId = result.rows[0].id;
-    res.json({ id: result.rows[0].id, name, email });
+    req.session.isAdmin = result.rows[0].is_admin;
+    res.json({ id: result.rows[0].id, name, email, is_admin: result.rows[0].is_admin });
   } catch (err) {
     if (err && err.message && err.message.includes('UNIQUE constraint failed')) {
       return res.status(409).json({ error: 'Email ya registrado' });
@@ -268,6 +287,31 @@ app.get('/api/matches/:id/participants', async (req, res) => {
       ORDER BY p.joined_at
     `, [matchId]);
     res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// Admin routes
+app.get('/api/users', requireAdmin, async (req, res) => {
+  try {
+    const result = await query('SELECT id, name, email, is_admin FROM users ORDER BY name');
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+app.delete('/api/users/:id', requireAdmin, async (req, res) => {
+  const userId = parseInt(req.params.id);
+  if (userId === req.session.userId) {
+    return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta' });
+  }
+  try {
+    await query('DELETE FROM users WHERE id = $1', [userId]);
+    res.json({ ok: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error interno' });

@@ -9,28 +9,96 @@ async function api(path, opts = {}) {
 }
 
 const userNameEl = document.getElementById('userName');
+const adminBadgeEl = document.getElementById('adminBadge');
 const logoutBtn = document.getElementById('logoutBtn');
 const createForm = document.getElementById('createForm');
 const matchesList = document.getElementById('matchesList');
 const filterDate = document.getElementById('filterDate');
 const loadBtn = document.getElementById('loadBtn');
+const createMatchBtn = document.getElementById('createMatchBtn');
+const createMatchModal = document.getElementById('createMatchModal');
+const closeCreateMatch = document.getElementById('closeCreateMatch');
+const adminPanel = document.getElementById('adminPanel');
+const closeAdminPanel = document.getElementById('closeAdminPanel');
+const usersList = document.getElementById('usersList');
+const successPopup = document.getElementById('successPopup');
+
+let currentUser = null;
 
 async function ensureAuth() {
   try {
-    const user = await api('/api/user');
-    userNameEl.textContent = user.name;
+    currentUser = await api('/api/user');
+    userNameEl.textContent = currentUser.name;
+    if (currentUser.is_admin) {
+      adminBadgeEl.style.display = '';
+      loadUsers();
+    }
   } catch (err) {
     // not authenticated -> redirect to login
     window.location.href = '/';
   }
 }
 
+function showSuccess(message) {
+  successPopup.textContent = message;
+  successPopup.style.display = '';
+  setTimeout(() => {
+    successPopup.style.display = 'none';
+  }, 3000);
+}
+
+async function loadUsers() {
+  if (!currentUser?.is_admin) return;
+  try {
+    const users = await api('/api/users');
+    usersList.innerHTML = '';
+    const table = document.createElement('table');
+    table.innerHTML = `
+      <tr>
+        <th>Nombre</th>
+        <th>Email</th>
+        <th>Acciones</th>
+      </tr>
+    `;
+    users.forEach(user => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${user.name}</td>
+        <td>${user.email}</td>
+        <td>
+          <button onclick="deleteUser(${user.id})" 
+            ${user.id === currentUser.id ? 'disabled' : ''}>
+            Eliminar
+          </button>
+        </td>
+      `;
+      table.appendChild(tr);
+    });
+    usersList.appendChild(table);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 logoutBtn.addEventListener('click', async () => { await api('/api/logout', { method: 'POST' }); window.location.href = '/'; });
+
+createMatchBtn.addEventListener('click', () => {
+  createMatchModal.style.display = '';
+});
+
+closeCreateMatch.addEventListener('click', () => {
+  createMatchModal.style.display = 'none';
+});
 
 createForm.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const form = Object.fromEntries(new FormData(createForm));
-  try { await api('/api/matches', { method: 'POST', body: form }); alert('Partido creado'); loadMatches(); }
+  try { 
+    await api('/api/matches', { method: 'POST', body: form }); 
+    showSuccess('Partido creado correctamente');
+    createMatchModal.style.display = 'none';
+    loadMatches();
+  }
   catch (err) { alert(err.error || 'Error al crear'); }
 });
 
