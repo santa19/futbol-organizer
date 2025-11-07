@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Partido</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header style="display:flex;justify-content:space-between;align-items:center">
+        <h1 id="matchTitle">Partido</h1>
+        <div>
+          <span id="userName"></span>
+          <button id="logoutBtn">Cerrar sesión</button>
+        </div>
+      </header>
+
+      <section id="details">
+        <div id="info">Cargando…</div>
+        <button id="joinBtn">Apuntarme</button>
+        <button id="participantsPopup">Ver participantes (ventana)</button>
+      </section>
+
+      <section id="participantsSection">
+        <h2>Participantes</h2>
+        <div id="participantsList">Cargando…</div>
+      </section>
+    </main>
+    <script src="/match.js"></script>
+  </body>
+</html>
