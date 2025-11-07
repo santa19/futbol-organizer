@@ -7,12 +7,12 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  result jsonb;
+  result_record record;
+  result jsonb := '[]'::jsonb;
   query_text text;
   param_count int;
   i int;
   param_value text;
-  wrapped_query text;
 BEGIN
   -- Validar que el SQL no esté vacío
   IF sql IS NULL OR trim(sql) = '' THEN
@@ -46,20 +46,11 @@ BEGIN
     RAISE EXCEPTION 'Processed query is null or empty';
   END IF;
 
-  -- Envolver la consulta en una subconsulta para obtener resultados como JSON
-  -- Usar format() para evitar conflictos con palabras clave como INTO
-  wrapped_query := format(
-    'SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb) FROM (%s) t',
-    query_text
-  );
-
-  -- Ejecutar la consulta envuelta
-  EXECUTE wrapped_query INTO result;
-
-  -- Asegurar que siempre devolvemos un array JSON válido
-  IF result IS NULL THEN
-    result := '[]'::jsonb;
-  END IF;
+  -- Ejecutar la consulta y recolectar resultados
+  -- Usar un loop FOR para iterar sobre los resultados
+  FOR result_record IN EXECUTE query_text LOOP
+    result := result || jsonb_build_array(row_to_json(result_record));
+  END LOOP;
 
   RETURN result;
 EXCEPTION
