@@ -262,32 +262,143 @@ app.post('/api/matches/:id/join', async (req, res) => {
   if (!user) return res.status(401).json({ error: 'No autenticado' });
   const matchId = req.params.id;
   try {
+    // Start transaction
+    await query('BEGIN');
+
     const matchResult = await query('SELECT * FROM matches WHERE id = $1', [matchId]);
-    if (!matchResult.rows[0]) return res.status(404).json({ error: 'Partido no encontrado' });
+    if (!matchResult.rows[0]) {
+      await query('ROLLBACK');
+      return res.status(404).json({ error: 'Partido no encontrado' });
+    }
     const match = matchResult.rows[0];
     
-    const alreadyResult = await query('SELECT * FROM participants WHERE match_id = $1 AND user_id = $2', [matchId, user.id]);
-    if (alreadyResult.rows[0]) return res.status(400).json({ error: 'Ya estás apuntado a este partido' });
+    // Check if already in participants or waitlist
+    const alreadyParticipant = await query(
+      'SELECT * FROM participants WHERE match_id = $1 AND user_id = $2',
+      [matchId, user.id]
+    );
+    const alreadyWaiting = await query(
+      'SELECT * FROM waitlist WHERE match_id = $1 AND user_id = $2',
+      [matchId, user.id]
+    );
     
-    const initialCount = await query('SELECT COUNT(*) as cnt FROM participants WHERE match_id = $1', [matchId]);
-    if (parseInt(initialCount.rows[0].cnt) >= match.max_players) {
-      return res.status(400).json({ error: 'El partido está completo' });
-    }
-    
-    await query('INSERT INTO participants (match_id, user_id) VALUES ($1, $2)', [matchId, user.id]);
-    
-    // Get updated count after joining
-    const updatedCount = await query('SELECT COUNT(*) as cnt FROM participants WHERE match_id = $1', [matchId]);
-    res.json({ 
-      ok: true, 
-      participant_count: parseInt(updatedCount.rows[0].cnt) 
-    });
-  } catch (err) {
-    if (err && err.message && err.message.includes('UNIQUE constraint failed')) {
+    if (alreadyParticipant.rows[0]) {
+      await query('ROLLBACK');
       return res.status(400).json({ error: 'Ya estás apuntado a este partido' });
     }
+    if (alreadyWaiting.rows[0]) {
+      await query('ROLLBACK');
+      return res.status(400).json({ error: 'Ya estás en lista de espera' });
+    }
+    
+    const participantCount = await query('SELECT COUNT(*) as cnt FROM participants WHERE match_id = $1', [matchId]);
+    const currentCount = parseInt(participantCount.rows[0].cnt);
+    
+    if (currentCount < match.max_players) {
+      // Add as participant
+      await query('INSERT INTO participants (match_id, user_id) VALUES ($1, $2)', [matchId, user.id]);
+      
+      // Check if we need to notify admin about expansion
+      if (currentCount + 1 === 14 || currentCount + 1 === 16 || currentCount + 1 === 20) {
+        // TODO: Notify admin about possible expansion
+      }
+      
+      await query('COMMIT');
+      return res.json({ 
+        ok: true, 
+        status: 'joined',
+        participant_count: currentCount + 1
+      });
+    } else {
+      // Add to waitlist
+      await query('INSERT INTO waitlist (match_id, user_id) VALUES ($1, $2)', [matchId, user.id]);
+      
+      const waitlistCount = await query('SELECT COUNT(*) as cnt FROM waitlist WHERE match_id = $1', [matchId]);
+      
+      await query('COMMIT');
+      return res.json({
+        ok: true,
+        status: 'waitlist',
+        participant_count: currentCount,
+        waitlist_position: parseInt(waitlistCount.rows[0].cnt)
+      });
+    }
+  } catch (err) {
+    await query('ROLLBACK');
     console.error(err);
-    res.status(500).json({ error: 'Error interno' });
+    res.status(500).json({ error: 'Error al unirse al partido' });
+  }
+});
+
+// Admin endpoint to expand match capacity
+app.post('/api/matches/:id/expand', async (req, res) => {
+  const user = await getCurrentUser(req);
+  if (!user || !user.is_admin) return res.status(401).json({ error: 'No autorizado' });
+  
+  const matchId = req.params.id;
+  try {
+    await query('BEGIN');
+    
+    const matchResult = await query('SELECT * FROM matches WHERE id = $1', [matchId]);
+    if (!matchResult.rows[0]) {
+      await query('ROLLBACK');
+      return res.status(404).json({ error: 'Partido no encontrado' });
+    }
+    const match = matchResult.rows[0];
+    
+    let newCapacity;
+    if (match.max_players === 14) newCapacity = 16;
+    else if (match.max_players === 16) newCapacity = 20;
+    else if (match.max_players === 20) newCapacity = 22;
+    else {
+      await query('ROLLBACK');
+      return res.status(400).json({ error: 'No se puede ampliar más la capacidad' });
+    }
+    
+    // Update capacity and record in history
+    const history = match.capacity_history || [];
+    history.push({
+      old_capacity: match.max_players,
+      new_capacity: newCapacity,
+      timestamp: new Date().toISOString(),
+      admin_id: user.id
+    });
+    
+    await query(
+      'UPDATE matches SET max_players = $1, capacity_history = $2 WHERE id = $3',
+      [newCapacity, JSON.stringify(history), matchId]
+    );
+    
+    // Move players from waitlist if possible
+    const slotsAvailable = newCapacity - match.max_players;
+    if (slotsAvailable > 0) {
+      const waitingPlayers = await query(
+        'SELECT user_id FROM waitlist WHERE match_id = $1 ORDER BY created_at ASC LIMIT $2',
+        [matchId, slotsAvailable]
+      );
+      
+      for (const player of waitingPlayers.rows) {
+        await query('INSERT INTO participants (match_id, user_id) VALUES ($1, $2)', [matchId, player.user_id]);
+        await query('DELETE FROM waitlist WHERE match_id = $1 AND user_id = $2', [matchId, player.user_id]);
+      }
+    }
+    
+    const participantCount = await query('SELECT COUNT(*) as cnt FROM participants WHERE match_id = $1', [matchId]);
+    const waitlistCount = await query('SELECT COUNT(*) as cnt FROM waitlist WHERE match_id = $1', [matchId]);
+    
+    await query('COMMIT');
+    
+    res.json({
+      ok: true,
+      new_capacity: newCapacity,
+      participant_count: parseInt(participantCount.rows[0].cnt),
+      waitlist_count: parseInt(waitlistCount.rows[0].cnt)
+    });
+    
+  } catch (err) {
+    await query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Error al expandir la capacidad del partido' });
   }
 });
 
@@ -331,6 +442,46 @@ app.delete('/api/users/:id', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// Get waitlist status for a match
+app.get('/api/matches/:id/waitlist', async (req, res) => {
+  const user = await getCurrentUser(req);
+  if (!user) return res.status(401).json({ error: 'No autenticado' });
+  
+  const matchId = req.params.id;
+  try {
+    const matchResult = await query('SELECT * FROM matches WHERE id = $1', [matchId]);
+    if (!matchResult.rows[0]) return res.status(404).json({ error: 'Partido no encontrado' });
+    
+    // Get all waitlist entries ordered by creation time
+    const waitlistResult = await query(`
+      SELECT w.id, w.created_at, u.id as user_id, u.name, u.email 
+      FROM waitlist w
+      JOIN users u ON u.id = w.user_id
+      WHERE w.match_id = $1
+      ORDER BY w.created_at ASC
+    `, [matchId]);
+    
+    // Get user's position if they're in the waitlist
+    let userPosition = -1;
+    for (let i = 0; i < waitlistResult.rows.length; i++) {
+      if (waitlistResult.rows[i].user_id === user.id) {
+        userPosition = i + 1;
+        break;
+      }
+    }
+    
+    res.json({
+      waitlist: waitlistResult.rows,
+      user_position: userPosition,
+      total_waiting: waitlistResult.rows.length
+    });
+    
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener la lista de espera' });
   }
 });
 
