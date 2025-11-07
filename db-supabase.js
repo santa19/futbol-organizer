@@ -18,16 +18,22 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 // Función para ejecutar consultas SQL usando Supabase
 async function query(text, params = []) {
   try {
-    // Convertir params array a JSONB para Supabase
-    const paramsJsonb = params;
+    // Validar que el SQL no esté vacío
+    if (!text || text.trim() === '') {
+      throw new Error('SQL query cannot be empty');
+    }
 
     // Usar supabase.rpc para ejecutar SQL directo
+    // Supabase espera params como array JSON
     const { data, error } = await supabase.rpc('exec_sql', {
       sql: text,
-      params: paramsJsonb
+      params: params || []
     });
 
     if (error) {
+      // Log del error para debugging
+      console.error('Error en exec_sql:', error);
+
       // Si el error es que la función no existe, usar método alternativo
       if (error.code === '42883' || error.message?.includes('function') || error.message?.includes('does not exist')) {
         console.warn('⚠️  RPC exec_sql no disponible. Por favor, ejecuta create-exec-sql-function.sql en Supabase.');
@@ -36,8 +42,13 @@ async function query(text, params = []) {
       }
       throw error;
     }
+
+    // data ya es un array de objetos JSON
     return { rows: data || [] };
   } catch (err) {
+    // Log del error para debugging
+    console.error('Error ejecutando query:', err);
+
     // Si el RPC no existe, intentar parsear y ejecutar la consulta manualmente
     if (err.code === '42883' || err.message?.includes('function') || err.message?.includes('does not exist')) {
       console.warn('⚠️  RPC exec_sql no disponible. Por favor, ejecuta create-exec-sql-function.sql en Supabase.');
