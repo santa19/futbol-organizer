@@ -2,7 +2,7 @@ const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const path = require('path');
-const { initDb, query, createTables } = require('./db-supabase');
+const { initDb, query, createTables } = require('./db');
 const WebSocket = require('ws');
 
 // WebSocket server para notificaciones en tiempo real
