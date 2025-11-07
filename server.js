@@ -575,29 +575,60 @@ app.get('/api/matches/:id/waitlist', async (req, res) => {
   }
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// Función para inicializar la base de datos
+async function initializeDatabase() {
+  try {
+    console.log('Inicializando la base de datos...');
+    await initDb();
+    console.log('Conexión a la base de datos establecida');
+    
+    console.log('Creando tablas si no existen...');
+    await createTables();
+    console.log('Inicialización de la base de datos completada');
+    
+    return true;
+  } catch (err) {
+    console.error('Error fatal durante la inicialización de la base de datos:', err);
+    return false;
+  }
+}
+
+// Iniciar el servidor solo si la base de datos se inicializa correctamente
+initializeDatabase().then(success => {
+  if (success) {
+    const server = app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+
+    // Configurar el manejo de WebSocket después de que el servidor esté listo
+    configureWebSocket(server);
+  } else {
+    console.error('No se pudo inicializar la base de datos. El servidor no se iniciará.');
+    process.exit(1);
+  }
 });
 
-// Manejar upgrade a WebSocket
-server.on('upgrade', function upgrade(request, socket, head) {
-  const url = new URL(request.url, 'http://localhost');
-  const matchId = url.searchParams.get('matchId');
-  
-  if (!matchId) {
-    socket.destroy();
-    return;
-  }
+// Función para configurar WebSocket
+function configureWebSocket(server) {
+  server.on('upgrade', function upgrade(request, socket, head) {
+    const url = new URL(request.url, 'http://localhost');
+    const matchId = url.searchParams.get('matchId');
+    
+    if (!matchId) {
+      socket.destroy();
+      return;
+    }
 
-  // Autenticar usando la cookie de sesión
-  const cookieHeader = request.headers.cookie;
-  if (!cookieHeader) {
-    socket.destroy();
-    return;
-  }
+    // Autenticar usando la cookie de sesión
+    const cookieHeader = request.headers.cookie;
+    if (!cookieHeader) {
+      socket.destroy();
+      return;
+    }
 
-  wss.handleUpgrade(request, socket, head, function done(ws) {
-    request.matchId = matchId;
-    wss.emit('connection', ws, request);
+    wss.handleUpgrade(request, socket, head, function done(ws) {
+      request.matchId = matchId;
+      wss.emit('connection', ws, request);
+    });
   });
-});
+}
