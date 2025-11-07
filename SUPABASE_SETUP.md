@@ -21,6 +21,18 @@ This will create all the required tables:
 - `reset_tokens`
 - `waitlist`
 
+### Step 1.5: Create the exec_sql RPC Function
+
+**IMPORTANT:** For the app to work correctly with complex SQL queries (JOINs, aggregations, etc.), you need to create the `exec_sql` RPC function:
+
+1. In the same SQL Editor in Supabase
+2. Click "New Query"
+3. Copy the entire contents of `create-exec-sql-function.sql` file
+4. Paste it into the SQL editor
+5. Click "Run" or press Ctrl+Enter
+
+This function allows the app to execute dynamic SQL queries with parameters.
+
 ### Step 2: Verify Environment Variables
 
 Make sure your deployment (Render) has these environment variables set:

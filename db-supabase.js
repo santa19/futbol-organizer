@@ -18,18 +18,33 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 // Función para ejecutar consultas SQL usando Supabase
 async function query(text, params = []) {
   try {
+    // Convertir params array a JSONB para Supabase
+    const paramsJsonb = params;
+
     // Usar supabase.rpc para ejecutar SQL directo
     const { data, error } = await supabase.rpc('exec_sql', {
       sql: text,
-      params: params
+      params: paramsJsonb
     });
 
-    if (error) throw error;
+    if (error) {
+      // Si el error es que la función no existe, usar método alternativo
+      if (error.code === '42883' || error.message?.includes('function') || error.message?.includes('does not exist')) {
+        console.warn('⚠️  RPC exec_sql no disponible. Por favor, ejecuta create-exec-sql-function.sql en Supabase.');
+        console.warn('   Usando método alternativo (limitado)...');
+        return await executeQueryManually(text, params);
+      }
+      throw error;
+    }
     return { rows: data || [] };
   } catch (err) {
     // Si el RPC no existe, intentar parsear y ejecutar la consulta manualmente
-    console.warn('RPC exec_sql no disponible, usando método alternativo');
-    return await executeQueryManually(text, params);
+    if (err.code === '42883' || err.message?.includes('function') || err.message?.includes('does not exist')) {
+      console.warn('⚠️  RPC exec_sql no disponible. Por favor, ejecuta create-exec-sql-function.sql en Supabase.');
+      console.warn('   Usando método alternativo (limitado)...');
+      return await executeQueryManually(text, params);
+    }
+    throw err;
   }
 }
 
@@ -37,10 +52,14 @@ async function query(text, params = []) {
 async function executeQueryManually(text, params = []) {
   const queryLower = text.toLowerCase().trim();
 
-  // Extraer nombre de tabla
+  // ADVERTENCIA: Este método tiene limitaciones significativas
+  // Para consultas complejas (JOINs, subconsultas, etc.), se requiere la función RPC exec_sql
+
+  // Extraer nombre de tabla (considerando aliases)
   let tableName = '';
   if (queryLower.includes('from ')) {
-    const fromMatch = text.match(/from\s+(\w+)/i);
+    // Buscar el primer nombre de tabla después de FROM (antes de cualquier alias o JOIN)
+    const fromMatch = text.match(/from\s+(\w+)(?:\s+\w+)?(?:\s+left\s+join|\s+inner\s+join|\s+join|\s+where|\s+group|\s+order|\s+limit|$)/i);
     if (fromMatch) tableName = fromMatch[1];
   } else if (queryLower.includes('insert into ')) {
     const insertMatch = text.match(/insert\s+into\s+(\w+)/i);
@@ -51,6 +70,13 @@ async function executeQueryManually(text, params = []) {
   } else if (queryLower.includes('delete from ')) {
     const deleteMatch = text.match(/delete\s+from\s+(\w+)/i);
     if (deleteMatch) tableName = deleteMatch[1];
+  }
+
+  // Si la consulta tiene JOINs, no podemos manejarla con el método manual
+  if (queryLower.includes('join ')) {
+    console.error('❌ Esta consulta requiere JOINs y no puede ejecutarse sin la función RPC exec_sql');
+    console.error('   Por favor, ejecuta create-exec-sql-function.sql en Supabase Dashboard');
+    throw new Error('Consultas con JOIN requieren la función RPC exec_sql. Ver create-exec-sql-function.sql');
   }
 
   // SELECT queries
