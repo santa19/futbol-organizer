@@ -55,6 +55,16 @@ async function executeQueryManually(text, params = []) {
 
   // SELECT queries
   if (queryLower.startsWith('select')) {
+    // Manejar COUNT(*) especialmente
+    if (queryLower.includes('count(*)')) {
+      const { count, error } = await supabase
+        .from(tableName)
+        .select('*', { count: 'exact', head: true });
+
+      if (error) throw error;
+      return { rows: [{ count: count || 0 }] };
+    }
+
     let query = supabase.from(tableName).select('*');
 
     // Aplicar filtros básicos si hay WHERE
