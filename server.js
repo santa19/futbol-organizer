@@ -226,8 +226,16 @@ app.get('/api/matches', async (req, res) => {
   const { date } = req.query;
   try {
     let result;
-    if (date) result = await query('SELECT * FROM matches WHERE date = $1 ORDER BY time', [date]);
-    else result = await query('SELECT * FROM matches ORDER BY date, time');
+    const sql = `
+      SELECT m.*, COUNT(p.id) as participant_count
+      FROM matches m
+      LEFT JOIN participants p ON p.match_id = m.id
+      ${date ? 'WHERE m.date = $1' : ''}
+      GROUP BY m.id
+      ORDER BY m.date, m.time
+    `;
+    if (date) result = await query(sql, [date]);
+    else result = await query(sql);
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -261,11 +269,19 @@ app.post('/api/matches/:id/join', async (req, res) => {
     const alreadyResult = await query('SELECT * FROM participants WHERE match_id = $1 AND user_id = $2', [matchId, user.id]);
     if (alreadyResult.rows[0]) return res.status(400).json({ error: 'Ya estás apuntado a este partido' });
     
-    const countResult = await query('SELECT COUNT(*) as cnt FROM participants WHERE match_id = $1', [matchId]);
-    if (parseInt(countResult.rows[0].cnt) >= match.max_players) return res.status(400).json({ error: 'El partido está completo' });
+    const initialCount = await query('SELECT COUNT(*) as cnt FROM participants WHERE match_id = $1', [matchId]);
+    if (parseInt(initialCount.rows[0].cnt) >= match.max_players) {
+      return res.status(400).json({ error: 'El partido está completo' });
+    }
     
     await query('INSERT INTO participants (match_id, user_id) VALUES ($1, $2)', [matchId, user.id]);
-    res.json({ ok: true });
+    
+    // Get updated count after joining
+    const updatedCount = await query('SELECT COUNT(*) as cnt FROM participants WHERE match_id = $1', [matchId]);
+    res.json({ 
+      ok: true, 
+      participant_count: parseInt(updatedCount.rows[0].cnt) 
+    });
   } catch (err) {
     if (err && err.message && err.message.includes('UNIQUE constraint failed')) {
       return res.status(400).json({ error: 'Ya estás apuntado a este partido' });

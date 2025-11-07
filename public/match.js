@@ -14,16 +14,17 @@ async function api(path, opts = {}) {
 }
 
 const userNameEl = document.getElementById('userName');
+const adminBadgeEl = document.getElementById('adminBadge');
 const logoutBtn = document.getElementById('logoutBtn');
 const infoEl = document.getElementById('info');
 const joinBtn = document.getElementById('joinBtn');
-const participantsPopup = document.getElementById('participantsPopup');
 const participantsList = document.getElementById('participantsList');
 
 async function ensureAuth() {
   try {
     const user = await api('/api/user');
     userNameEl.textContent = user.name;
+    if (user.is_admin && adminBadgeEl) adminBadgeEl.style.display = '';
     return user;
   } catch (err) {
     window.location.href = '/';
@@ -63,13 +64,18 @@ async function loadParticipants() {
 
 joinBtn.addEventListener('click', async () => {
   const id = qsParam('id');
-  try { await api(`/api/matches/${encodeURIComponent(id)}/join`, { method: 'POST' }); alert('Apuntado'); loadParticipants(); }
+  try { 
+    const result = await api(`/api/matches/${encodeURIComponent(id)}/join`, { method: 'POST' }); 
+    showSuccess('Te has apuntado al partido');
+    loadParticipants();
+    // Actualizar la info con el nuevo conteo
+    const matchResult = await api(`/api/matches/${encodeURIComponent(id)}`);
+    if (matchResult) {
+      document.querySelector('.participant-count').textContent = 
+        `${result.participant_count}/${matchResult.max_players} jugadores`;
+    }
+  }
   catch (err) { alert(err.error || 'Error'); }
-});
-
-participantsPopup.addEventListener('click', () => {
-  const id = qsParam('id');
-  window.open(`/participants.html?id=${encodeURIComponent(id)}`, `participants_${id}`, 'width=400,height=600');
 });
 
 // Initial

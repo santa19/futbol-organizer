@@ -116,7 +116,16 @@ async function loadMatches() {
       const card = document.createElement('div');
       card.className = 'card';
       const left = document.createElement('div');
-      left.innerHTML = `<div><strong>${m.date} ${m.time || ''}</strong></div><div class="meta">${m.location || ''} • max ${m.max_players}</div>`;
+      const participantCount = parseInt(m.participant_count) || 0;
+      const isFull = participantCount >= m.max_players;
+      left.innerHTML = `
+        <div><strong>${m.date} ${m.time || ''}</strong></div>
+        <div class="meta">
+          ${m.location || ''} • 
+          <span class="participant-count ${isFull ? 'full' : ''}">
+            ${participantCount}/${m.max_players} jugadores
+          </span>
+        </div>`;
       const right = document.createElement('div');
       const openBtn = document.createElement('button');
       openBtn.textContent = 'Abrir partido';

@@ -5,21 +5,24 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Partido</title>
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/components.css" />
   </head>
   <body>
-    <main class="container">
-      <header style="display:flex;justify-content:space-between;align-items:center">
-        <h1 id="matchTitle">Partido</h1>
-        <div>
-          <span id="userName"></span>
-          <button id="logoutBtn">Cerrar sesión</button>
+    <header class="header">
+      <h1 id="matchTitle">Partido</h1>
+      <div class="header-right">
+        <div class="user-info">
+          <span id="userName" class="user-name"></span>
+          <span id="adminBadge" class="admin-badge" style="display:none">Admin</span>
         </div>
-      </header>
+        <button id="logoutBtn" class="secondary">Cerrar sesión</button>
+      </div>
+    </header>
 
+    <main class="matches-container">
       <section id="details">
         <div id="info">Cargando…</div>
-        <button id="joinBtn">Apuntarme</button>
-        <button id="participantsPopup">Ver participantes (ventana)</button>
+        <button id="joinBtn" class="primary">Apuntarme</button>
       </section>
 
       <section id="participantsSection">

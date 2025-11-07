@@ -103,6 +103,21 @@
   animation: slideIn 0.3s ease-out;
 }
 
+.participant-count {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(15,23,42,0.05);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.9em;
+  color: var(--text);
+}
+
+.participant-count.full {
+  background: var(--error);
+  color: white;
+}
+
 @keyframes slideIn {
   from {
     transform: translateX(100%);
