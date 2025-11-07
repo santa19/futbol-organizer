@@ -3,6 +3,45 @@ const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const { initDb, query, createTables } = require('./db-pg');
+const WebSocket = require('ws');
+
+// WebSocket server para notificaciones en tiempo real
+const wss = new WebSocket.Server({ noServer: true });
+
+// Mapa de conexiones por matchId
+const matchConnections = new Map();
+
+// Maneja nueva conexión WebSocket
+wss.on('connection', function connection(ws, req) {
+  const matchId = req.matchId;
+  if (!matchConnections.has(matchId)) {
+    matchConnections.set(matchId, new Set());
+  }
+  matchConnections.get(matchId).add(ws);
+
+  ws.on('close', () => {
+    const connections = matchConnections.get(matchId);
+    if (connections) {
+      connections.delete(ws);
+      if (connections.size === 0) {
+        matchConnections.delete(matchId);
+      }
+    }
+  });
+});
+
+// Función helper para notificar cambios a todos los clientes de un partido
+function notifyMatchUpdate(matchId, data) {
+  const connections = matchConnections.get(matchId);
+  if (connections) {
+    const message = JSON.stringify(data);
+    connections.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    });
+  }
+}
 
 // Middleware to require authentication for specific routes
 function requireAuth(req, res, next) {
@@ -536,6 +575,29 @@ app.get('/api/matches/:id/waitlist', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
+});
+
+// Manejar upgrade a WebSocket
+server.on('upgrade', function upgrade(request, socket, head) {
+  const url = new URL(request.url, 'http://localhost');
+  const matchId = url.searchParams.get('matchId');
+  
+  if (!matchId) {
+    socket.destroy();
+    return;
+  }
+
+  // Autenticar usando la cookie de sesión
+  const cookieHeader = request.headers.cookie;
+  if (!cookieHeader) {
+    socket.destroy();
+    return;
+  }
+
+  wss.handleUpgrade(request, socket, head, function done(ws) {
+    request.matchId = matchId;
+    wss.emit('connection', ws, request);
+  });
 });

@@ -222,21 +222,34 @@ async function loadMatches() {
         }
       }
 
-      // start polling when the card is visible
-      let pollInterval = null;
-      function startPolling() {
-        if (pollInterval) return;
-        refreshParticipants();
-        pollInterval = setInterval(refreshParticipants, 15000);
-      }
-      function stopPolling() {
-        if (!pollInterval) return;
-        clearInterval(pollInterval);
-        pollInterval = null;
-      }
-
-      // Start polling immediately for all cards (can be optimized later)
-      startPolling();
+      // Conectar WebSocket para actualizaciones en tiempo real
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${wsProtocol}//${window.location.host}?matchId=${m.id}`);
+      
+      ws.onmessage = async function(event) {
+        const data = JSON.parse(event.data);
+        if (data.type === 'participant_joined' || data.type === 'participant_left') {
+          // Actualizar la visualización
+          await refreshParticipants();
+          
+          // Animación de la tarjeta
+          card.style.transition = 'background-color 0.3s ease';
+          card.style.backgroundColor = '#e3f2fd';
+          setTimeout(() => {
+            card.style.backgroundColor = '';
+          }, 1000);
+          
+          // Actualizar contador
+          card.querySelector('.participant-count').textContent = 
+            `${data.participant_count}/${m.max_players} jugadores`;
+        }
+      };
+      
+      // Inicial refresh
+      refreshParticipants();
+      
+      // Cleanup on card removal
+      card.addEventListener('remove', () => ws.close());
 
       participantsBtn.addEventListener('click', async () => {
         // toggle visibility and load participants if empty
