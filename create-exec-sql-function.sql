@@ -12,6 +12,7 @@ DECLARE
   param_count int;
   i int;
   param_value text;
+  wrapped_query text;
 BEGIN
   -- Validar que el SQL no esté vacío
   IF sql IS NULL OR trim(sql) = '' THEN
@@ -45,9 +46,15 @@ BEGIN
     RAISE EXCEPTION 'Processed query is null or empty';
   END IF;
 
-  -- Ejecutar la consulta y devolver resultados como JSON
-  EXECUTE 'SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb) FROM (' || query_text || ') t'
-  INTO result;
+  -- Envolver la consulta en una subconsulta para obtener resultados como JSON
+  -- Usar format() para evitar conflictos con palabras clave como INTO
+  wrapped_query := format(
+    'SELECT COALESCE(jsonb_agg(row_to_json(t)), ''[]''::jsonb) FROM (%s) t',
+    query_text
+  );
+
+  -- Ejecutar la consulta envuelta
+  EXECUTE wrapped_query INTO result;
 
   -- Asegurar que siempre devolvemos un array JSON válido
   IF result IS NULL THEN
