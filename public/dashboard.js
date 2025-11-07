@@ -122,13 +122,48 @@ async function loadMatches() {
       openBtn.textContent = 'Abrir partido';
       openBtn.addEventListener('click', () => { window.location.href = `/match.html?id=${encodeURIComponent(m.id)}`; });
       const participantsBtn = document.createElement('button');
-      participantsBtn.textContent = 'Ver participantes (ventana)';
+      participantsBtn.textContent = 'Mostrar participantes';
       participantsBtn.style.marginLeft = '8px';
-      participantsBtn.addEventListener('click', () => { window.open(`/participants.html?id=${encodeURIComponent(m.id)}`, `participants_${m.id}`, 'width=400,height=600'); });
+
+      // Container for inline participants
+      const participantsContainer = document.createElement('div');
+      participantsContainer.className = 'participants-inline';
+      participantsContainer.style.marginTop = '10px';
+
+      participantsBtn.addEventListener('click', async () => {
+        // toggle visibility and load participants if empty
+        if (participantsContainer.style.display === 'none' || !participantsContainer.style.display) {
+          participantsContainer.style.display = '';
+          if (!participantsContainer.dataset.loaded) {
+            participantsContainer.textContent = 'Cargando…';
+            try {
+              const parts = await api(`/api/matches/${encodeURIComponent(m.id)}/participants`);
+              if (!parts || parts.length === 0) participantsContainer.textContent = 'No hay participantes.';
+              else {
+                const ul = document.createElement('ul');
+                for (const p of parts) {
+                  const li = document.createElement('li');
+                  li.textContent = `${p.name} (${p.email || '-'})`;
+                  ul.appendChild(li);
+                }
+                participantsContainer.innerHTML = '';
+                participantsContainer.appendChild(ul);
+              }
+              participantsContainer.dataset.loaded = '1';
+            } catch (err) {
+              participantsContainer.textContent = 'Error cargando participantes.';
+            }
+          }
+        } else {
+          participantsContainer.style.display = 'none';
+        }
+      });
+
       right.appendChild(openBtn);
       right.appendChild(participantsBtn);
       card.appendChild(left);
       card.appendChild(right);
+      card.appendChild(participantsContainer);
       matchesList.appendChild(card);
     }
   } catch (err) { matchesList.innerHTML = '<p>Error cargando partidos</p>'; }
