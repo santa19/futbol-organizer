@@ -61,8 +61,15 @@ app.use('/api/matches', requireAuth);
 app.use('/api/user', requireAuth);
 
 (async () => {
-  await initDb();
-  await createTables();
+  try {
+    await initDb();
+    await createTables();
+  } catch (err) {
+    console.error('Error inicializando la base de datos. Asegúrate de que la variable de entorno DATABASE_URL está configurada o que Postgres está corriendo en localhost:5432.');
+    console.error(err && err.stack ? err.stack : err);
+    // Salimos con código 1 para que el proceso no quede en un estado inconsistente
+    process.exit(1);
+  }
 })();
 
 // Helper to get current user from session
