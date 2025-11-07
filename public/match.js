@@ -78,5 +78,11 @@ joinBtn.addEventListener('click', async () => {
   catch (err) { alert(err.error || 'Error'); }
 });
 
+// Manejador para el botón de ver campo
+document.getElementById('viewFieldBtn').addEventListener('click', () => {
+    const matchId = qsParam('id');
+    window.location.href = `/soccer-field.html?id=${matchId}`;
+});
+
 // Initial
 (async () => { await ensureAuth(); await loadMatch(); await loadParticipants(); })();

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campo de Fútbol</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/css/soccer-field.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Campo de Fútbol</h1>
+        
+        <div class="soccer-field">
+            <div class="field-lines">
+                <div class="center-circle"></div>
+                <div class="center-line"></div>
+                <div class="penalty-area penalty-area-left"></div>
+                <div class="penalty-area penalty-area-right"></div>
+            </div>
+
+            <!-- Las posiciones se llenarán dinámicamente -->
+        </div>
+
+        <div class="waitlist-container">
+            <div class="waitlist-title">Lista de espera</div>
+            <div id="waitlist"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuración de posiciones por formación
+        const formations = {
+            '4-4-2': [
+                { id: 'gk', name: 'Portero' },
+                { id: 'lb', name: 'Lateral Izquierdo' },
+                { id: 'cb1', name: 'Central Izquierdo' },
+                { id: 'cb2', name: 'Central Derecho' },
+                { id: 'rb', name: 'Lateral Derecho' },
+                { id: 'lm', name: 'Medio Izquierdo' },
+                { id: 'cm1', name: 'Mediocentro Izquierdo' },
+                { id: 'cm2', name: 'Mediocentro Derecho' },
+                { id: 'rm', name: 'Medio Derecho' },
+                { id: 'st1', name: 'Delantero Izquierdo' },
+                { id: 'st2', name: 'Delantero Derecho' }
+            ],
+            'expansions': {
+                '16': [
+                    { id: 'cam', name: 'Mediapunta' },
+                    { id: 'cdm', name: 'Mediocentro Defensivo' }
+                ],
+                '20': [
+                    { id: 'lw', name: 'Extremo Izquierdo' },
+                    { id: 'rw', name: 'Extremo Derecho' }
+                ]
+            }
+        };
+
+        let matchId = new URLSearchParams(window.location.search).get('id');
+        if (!matchId) {
+            window.location.href = '/';
+        }
+
+        function createPlayerPosition(position) {
+            const div = document.createElement('div');
+            div.className = `player-position position-${position.id}`;
+            div.dataset.position = position.id;
+            div.dataset.name = position.name;
+            return div;
+        }
+
+        function setupField() {
+            const field = document.querySelector('.soccer-field');
+            
+            // Crear posiciones base (4-4-2)
+            formations['4-4-2'].forEach(pos => {
+                field.appendChild(createPlayerPosition(pos));
+            });
+        }
+
+        function updatePositions(players, maxPlayers) {
+            const positions = document.querySelectorAll('.player-position');
+            positions.forEach(pos => {
+                pos.classList.remove('occupied');
+                pos.textContent = '';
+            });
+
+            // Mostrar posiciones adicionales según capacidad
+            if (maxPlayers >= 16) {
+                formations.expansions['16'].forEach(pos => {
+                    if (!document.querySelector(`.position-${pos.id}`)) {
+                        document.querySelector('.soccer-field').appendChild(createPlayerPosition(pos));
+                    }
+                });
+            }
+            if (maxPlayers >= 20) {
+                formations.expansions['20'].forEach(pos => {
+                    if (!document.querySelector(`.position-${pos.id}`)) {
+                        document.querySelector('.soccer-field').appendChild(createPlayerPosition(pos));
+                    }
+                });
+            }
+
+            // Asignar jugadores a posiciones
+            players.forEach((player, index) => {
+                const positions = document.querySelectorAll('.player-position');
+                if (index < positions.length) {
+                    positions[index].classList.add('occupied');
+                    positions[index].textContent = player.name.charAt(0);
+                    positions[index].title = player.name;
+                }
+            });
+        }
+
+        function updateWaitlist(waitlist) {
+            const container = document.getElementById('waitlist');
+            container.innerHTML = '';
+            
+            waitlist.forEach((player, index) => {
+                const div = document.createElement('div');
+                div.className = 'waitlist-item';
+                div.innerHTML = `
+                    <span>${index + 1}. ${player.name}</span>
+                    <span>Desde: ${new Date(player.created_at).toLocaleString()}</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function refreshData() {
+            try {
+                // Obtener participantes
+                const participantsResponse = await fetch(`/api/matches/${matchId}/participants`);
+                const participants = await participantsResponse.json();
+
+                // Obtener datos del partido
+                const matchResponse = await fetch(`/api/matches/${matchId}`);
+                const match = await matchResponse.json();
+
+                // Obtener lista de espera
+                const waitlistResponse = await fetch(`/api/matches/${matchId}/waitlist`);
+                const waitlistData = await waitlistResponse.json();
+
+                updatePositions(participants, match.max_players);
+                updateWaitlist(waitlistData.waitlist);
+            } catch (error) {
+                console.error('Error al actualizar los datos:', error);
+            }
+        }
+
+        // Inicializar
+        setupField();
+        refreshData();
+
+        // Actualizar cada 30 segundos
+        setInterval(refreshData, 30000);
+    </script>
+</body>
+</html>

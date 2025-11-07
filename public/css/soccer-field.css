@@ -1,0 +1,170 @@
+.soccer-field {
+    position: relative;
+    width: 800px;
+    height: 600px;
+    background-color: #4CAF50;
+    margin: 20px auto;
+    border: 2px solid white;
+    border-radius: 5px;
+}
+
+/* Campo y líneas */
+.field-lines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.center-circle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 150px;
+    height: 150px;
+    border: 2px solid white;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.center-line {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    height: 100%;
+    width: 2px;
+    background-color: white;
+}
+
+.penalty-area {
+    position: absolute;
+    width: 200px;
+    height: 300px;
+    border: 2px solid white;
+}
+
+.penalty-area-left {
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.penalty-area-right {
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Posiciones de jugadores */
+.player-position {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 2;
+}
+
+.player-position.occupied {
+    background-color: #2196F3;
+    color: white;
+}
+
+.player-position:hover {
+    transform: scale(1.1);
+}
+
+/* Formación 4-4-2 */
+.position-gk { top: 50%; left: 5%; transform: translate(-50%, -50%); }
+
+.position-lb { top: 20%; left: 20%; transform: translate(-50%, -50%); }
+.position-cb1 { top: 40%; left: 20%; transform: translate(-50%, -50%); }
+.position-cb2 { top: 60%; left: 20%; transform: translate(-50%, -50%); }
+.position-rb { top: 80%; left: 20%; transform: translate(-50%, -50%); }
+
+.position-lm { top: 20%; left: 40%; transform: translate(-50%, -50%); }
+.position-cm1 { top: 40%; left: 40%; transform: translate(-50%, -50%); }
+.position-cm2 { top: 60%; left: 40%; transform: translate(-50%, -50%); }
+.position-rm { top: 80%; left: 40%; transform: translate(-50%, -50%); }
+
+.position-st1 { top: 35%; left: 60%; transform: translate(-50%, -50%); }
+.position-st2 { top: 65%; left: 60%; transform: translate(-50%, -50%); }
+
+/* Jugadores adicionales para cuando se expande */
+.position-cam { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.position-cdm { top: 50%; left: 30%; transform: translate(-50%, -50%); }
+
+.position-lw { top: 20%; left: 70%; transform: translate(-50%, -50%); }
+.position-rw { top: 80%; left: 70%; transform: translate(-50%, -50%); }
+
+/* Tooltips */
+.player-tooltip {
+    position: absolute;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 3px;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 3;
+    white-space: nowrap;
+}
+
+/* Lista de espera */
+.waitlist-container {
+    margin-top: 20px;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 5px;
+}
+
+.waitlist-title {
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.waitlist-item {
+    padding: 5px;
+    margin: 2px 0;
+    background-color: #f0f0f0;
+    border-radius: 3px;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Animaciones */
+@keyframes playerJoin {
+    from {
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 0;
+    }
+    to {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+}
+
+.player-join {
+    animation: playerJoin 0.5s ease-out;
+}
+
+@keyframes playerLeave {
+    from {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+    to {
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 0;
+    }
+}
+
+.player-leave {
+    animation: playerLeave 0.5s ease-in;
+}
