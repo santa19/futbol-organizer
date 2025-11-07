@@ -20,6 +20,10 @@ const infoEl = document.getElementById('info');
 const joinBtn = document.getElementById('joinBtn');
 const participantsList = document.getElementById('participantsList');
 
+function showSuccess(message) {
+  alert(message);
+}
+
 async function ensureAuth() {
   try {
     const user = await api('/api/user');
@@ -64,18 +68,23 @@ async function loadParticipants() {
 
 joinBtn.addEventListener('click', async () => {
   const id = qsParam('id');
-  try { 
-    const result = await api(`/api/matches/${encodeURIComponent(id)}/join`, { method: 'POST' }); 
-    showSuccess('Te has apuntado al partido');
-    loadParticipants();
-    // Actualizar la info con el nuevo conteo
-    const matchResult = await api(`/api/matches/${encodeURIComponent(id)}`);
-    if (matchResult) {
-      document.querySelector('.participant-count').textContent = 
-        `${result.participant_count}/${matchResult.max_players} jugadores`;
+  try {
+    const result = await api(`/api/matches/${encodeURIComponent(id)}/join`, { method: 'POST' });
+
+    // Recargar participantes y match info
+    await loadParticipants();
+    await loadMatch();
+
+    // Mostrar mensaje de éxito
+    if (result.status === 'waitlist') {
+      alert(`Te has añadido a la lista de espera. Posición: ${result.waitlist_position}`);
+    } else {
+      alert('Te has apuntado al partido correctamente');
     }
   }
-  catch (err) { alert(err.error || 'Error'); }
+  catch (err) {
+    alert(err.error || 'Error al apuntarse al partido');
+  }
 });
 
 // Manejador para el botón de ver campo
